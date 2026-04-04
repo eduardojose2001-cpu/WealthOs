@@ -966,7 +966,7 @@ function checkAuth(){
 // CONFIG
 // ══════════════════════════════════════════════════════════
 const SB_URL='https://sskfbweoikcdcbiwqygv.supabase.co';
-const SB_KEY='sb_publishable_IVZA9yjFpshf0BRpUeFjzg_xHuztBDt';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNza2Zid2VvaWtjZGNiaXdxeWd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNzI0NjgsImV4cCI6MjA5MDg0ODQ2OH0.1x2li855c8pHTD8U_VmMw2xDmiufyjBG3bDPO21Gd_c';
 // Finnhub key — también editable desde Config
 const FH_KEY_DEFAULT='d788ucpr01qsamsjd0h0d788ucpr01qsamsjd0hg';
 
@@ -1241,6 +1241,9 @@ async function refreshPrices(){
   updateMarketStatus();
   btn.classList.remove('live-active');
   refreshing=false;
+  // After portfolio prices, load full market movers
+  if(apiKey&&!marketLoaded) fetchMarketMovers();
+  else if(apiKey) fetchMarketMovers(); // refresh market data too
 }
 
 async function fetchQ(sym){
@@ -1319,7 +1322,7 @@ function render(){
   renderLine(positions);
   renderHistory();
   renderRecs(positions,totalVal);
-  renderBestWorst(positions);
+  renderBestWorst();
   renderCalendar(positions);
   document.getElementById('posCount').textContent=positions.length+' activos';
 }
@@ -1480,60 +1483,113 @@ function clearChartStats(){
   ['csRend','csVar','csMin','csMax'].forEach(id=>{document.getElementById(id).textContent='—';document.getElementById(id).className='cs-val neu';});
 }
 
-// ── BEST & WORST ──
+// ── BEST & WORST — mercado general ──
+// Lista amplia de acciones del mercado para comparar
+const MARKET_WATCHLIST=[
+  'NVDA','MSFT','AAPL','GOOGL','META','AMZN','TSLA','AMD','INTC','NFLX',
+  'UNH','JNJ','PFE','ABBV','MRK','ISRG',
+  'V','MA','JPM','BAC','GS','NU',
+  'VOO','QQQ','SPY','XLV',
+  'UBER','ABNB','SHOP','SQ','PYPL','COIN',
+  'DIS','SPOT','SNAP','RBLX',
+  'XOM','CVX','NKE','SBUX','MCD'
+];
+// marketData: {ticker: {c, dp, d}}
+let marketData={};
+let marketLoaded=false;
+
+async function fetchMarketMovers(){
+  if(!apiKey) return;
+  const el=document.getElementById('bwGrid');
+  el.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:1rem;color:var(--muted);font-size:11px;animation:fadeUp 0.3s ease">Cargando datos del mercado...</div>';
+
+  // Fetch all in parallel with small delay to respect rate limit
+  const results=await Promise.allSettled(
+    MARKET_WATCHLIST.map((t,i)=>sleep(i*80).then(()=>fetchQ(t)))
+  );
+  results.forEach((r,i)=>{
+    if(r.status==='fulfilled'&&r.value){
+      const q=r.value;
+      marketData[MARKET_WATCHLIST[i]]={c:q.c,dp:q.dp,d:q.d};
+    }
+  });
+  marketLoaded=true;
+  renderBestWorst();
+}
+
 function setBWPeriod(p,btn){
   bwPeriod=p;
   document.querySelectorAll('#bwDayBtn,#bwMonBtn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  renderBestWorst(calcPositions());
+  renderBestWorst();
 }
 
-function renderBestWorst(positions){
+function renderBestWorst(){
   const el=document.getElementById('bwGrid');
-  const withData=positions.filter(p=>liveChg[p.ticker]);
 
-  if(!withData.length){
-    el.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:1.5rem 1rem;color:var(--muted);font-size:11px">Carga precios live (botón ↺) para ver rankings</div>';
+  // Build unified list: market data + portfolio P&L for "Mes" tab
+  const allTickers=Object.keys(marketData).filter(t=>marketData[t]&&typeof marketData[t].dp==='number');
+
+  if(!allTickers.length){
+    el.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:1.5rem 1rem;color:var(--muted);font-size:11px">
+      <div style="margin-bottom:8px">Sin datos de mercado aún</div>
+      <button onclick="fetchMarketMovers()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--blue2);font-family:var(--mono);font-size:10px;padding:6px 14px;cursor:pointer">↺ Cargar mercado</button>
+    </div>`;
     return;
   }
 
-  // Sort by today's change or by total P&L (as monthly proxy)
   let sorted;
   if(bwPeriod==='day'){
-    sorted=[...withData].sort((a,b)=>(liveChg[b.ticker]?.dp||0)-(liveChg[a.ticker]?.dp||0));
+    // Sort by % change today across full market watchlist
+    sorted=allTickers
+      .map(t=>({ticker:t,dp:marketData[t].dp,price:marketData[t].c}))
+      .sort((a,b)=>b.dp-a.dp);
   } else {
-    // Monthly: use accumulated P&L %
-    sorted=[...positions].sort((a,b)=>{
-      const pa=a.costBasis>0?((a.qty*(liveP[a.ticker]||a.costBasis/a.qty)-a.costBasis)/a.costBasis)*100:0;
-      const pb=b.costBasis>0?((b.qty*(liveP[b.ticker]||b.costBasis/b.qty)-b.costBasis)/b.costBasis)*100:0;
-      return pb-pa;
-    });
+    // "Mes" tab: show portfolio P&L % for owned stocks, rest show YTD from price
+    const positions=calcPositions();
+    const posMap={};
+    positions.forEach(p=>{posMap[p.ticker]=p;});
+    // Use portfolio positions sorted by P&L for "mes"
+    sorted=positions.map(p=>{
+      const price=liveP[p.ticker]||p.costBasis/p.qty;
+      const plPct=p.costBasis>0?((p.qty*price-p.costBasis)/p.costBasis)*100:0;
+      return {ticker:p.ticker,dp:plPct,price,isPortfolio:true};
+    }).sort((a,b)=>b.dp-a.dp);
+    if(!sorted.length){
+      el.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:1rem;color:var(--muted);font-size:11px">Registra posiciones para ver tu rendimiento mensual</div>';
+      return;
+    }
   }
 
-  const top=sorted.slice(0,3);
-  const bot=[...sorted].reverse().slice(0,3);
+  const top=sorted.slice(0,5);
+  const bot=[...sorted].reverse().slice(0,5);
 
-  const makeCard=(p,isWinner)=>{
-    const chg=liveChg[p.ticker];
-    const price=liveP[p.ticker]||p.costBasis/p.qty;
-    let pct,label;
-    if(bwPeriod==='day'&&chg){pct=chg.dp;label=(pct>=0?'+':'')+pct.toFixed(2)+'%';}
-    else{const plPct=p.costBasis>0?((p.qty*price-p.costBasis)/p.costBasis)*100:0;pct=plPct;label=(pct>=0?'+':'')+pct.toFixed(2)+'%';}
-    return `<div class="bw-item ${isWinner?'winner':'loser'}">
-      <div class="bw-ticker">${p.ticker}</div>
-      <div class="bw-chg ${pct>=0?'up':'dn'}">${label}</div>
-      <div class="bw-price">$${price.toFixed(2)}</div>
+  const makeCard=(item,isWinner)=>{
+    const sign=item.dp>=0?'+':'';
+    const inPortfolio=calcPositions().some(p=>p.ticker===item.ticker);
+    return `<div class="bw-item ${isWinner?'winner':'loser'}" style="position:relative">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="bw-ticker">${item.ticker}${inPortfolio?'<span style="font-size:7px;color:var(--blue2);margin-left:4px;vertical-align:middle">●</span>':''}</div>
+          <div class="bw-price">$${item.price.toFixed(2)}</div>
+        </div>
+        <div class="bw-chg ${item.dp>=0?'up':'dn'}" style="font-size:14px;font-weight:600">${sign}${item.dp.toFixed(2)}%</div>
+      </div>
     </div>`;
   };
 
-  const periodLabel=bwPeriod==='day'?'Rendimiento hoy':'P&L acumulado';
+  const periodLabel=bwPeriod==='day'?'Cambio hoy · S&P500 universe':'P&L acumulado · Tu portafolio';
   el.innerHTML=`
+    <div style="grid-column:1/-1;font-size:8px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;padding:0 0 6px;display:flex;justify-content:space-between;align-items:center">
+      <span>${periodLabel}</span>
+      ${bwPeriod==='day'?`<span style="color:var(--muted)">${allTickers.length} acciones</span>`:''}
+    </div>
     <div class="bw-col">
-      <div class="bw-label green">▲ Mejores<span style="color:var(--muted);font-size:7px;margin-left:4px">${periodLabel}</span></div>
+      <div class="bw-label green">▲ Mejores</div>
       ${top.map(p=>makeCard(p,true)).join('')}
     </div>
     <div class="bw-col">
-      <div class="bw-label red">▼ Peores<span style="color:var(--muted);font-size:7px;margin-left:4px">${periodLabel}</span></div>
+      <div class="bw-label red">▼ Peores</div>
       ${bot.map(p=>makeCard(p,false)).join('')}
     </div>`;
 }
