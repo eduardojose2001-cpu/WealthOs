@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Edu Portfolio">
@@ -921,7 +924,7 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 
       <div class="set-card">
         <div class="set-title">Acerca de</div>
-        <div class="set-row"><span class="set-key">Versión</span><span class="set-val">4.1 Pro</span></div>
+        <div class="set-row"><span class="set-key">Versión</span><span class="set-val" id="setVersion">4.2</span></div>
         <div class="set-row"><span class="set-key">Construido por</span><span class="set-val">Edu + Claude</span></div>
         <div class="set-row"><span class="set-key">Datos</span><span class="set-val">Supabase + Finnhub</span></div>
         <div class="fg" style="margin-top:12px">
@@ -1004,8 +1007,22 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 
 <script>
 // ══════════════════════════════════════════════════════════
-// GITHUB PAGES URL — ⚠️ CAMBIA ESTO con tu URL real
-// Ejemplo: 'https://tuusuario.github.io/edu-portfolio'
+// VERSIÓN — actualiza este número cada vez que subas cambios
+// ══════════════════════════════════════════════════════════
+const APP_VERSION = '4.2';
+
+// Cache-buster: si la URL no tiene ?v=APP_VERSION, redirige con él
+// Esto fuerza a Safari a descargar el archivo fresco cada versión
+(function(){
+  const url = new URL(location.href);
+  if(location.protocol !== 'file:' && url.searchParams.get('v') !== APP_VERSION){
+    url.searchParams.set('v', APP_VERSION);
+    location.replace(url.toString());
+  }
+})();
+
+// ══════════════════════════════════════════════════════════
+// GITHUB PAGES URL
 // ══════════════════════════════════════════════════════════
 const GITHUB_PAGES_URL = localStorage.getItem('edu_gh_url') || 'https://eduardojose2001-cpu.github.io/edu-portfolio/';
 
@@ -1254,6 +1271,8 @@ async function bootApp(){
   document.getElementById('fDate').value=today();
   document.getElementById('setCOP').value=copRate;
   if(apiKey) document.getElementById('setKey').value=apiKey;
+  const vEl=document.getElementById('setVersion');
+  if(vEl) vEl.textContent=APP_VERSION+' Pro';
   const ghUrlEl=document.getElementById('setGhUrl');
   if(ghUrlEl&&GITHUB_PAGES_URL) ghUrlEl.value=GITHUB_PAGES_URL;
 
