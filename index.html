@@ -338,6 +338,63 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .pos-card:nth-child(3),.rec:nth-child(3),.ec-item:nth-child(3){animation-delay:0.12s}
 .pos-card:nth-child(4),.rec:nth-child(4),.ec-item:nth-child(4){animation-delay:0.16s}
 
+/* ── STOCK DETAIL MODAL ── */
+#stockModal{
+  position:fixed;inset:0;z-index:500;
+  background:rgba(0,0,0,0.7);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  display:none;align-items:flex-end;justify-content:center;
+  padding:0;
+}
+#stockModal.open{display:flex}
+@keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+.sm-sheet{
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:20px 20px 0 0;
+  width:100%;max-width:480px;
+  max-height:88vh;overflow-y:auto;
+  padding:0 0 env(safe-area-inset-bottom,16px);
+  animation:slideUp 0.32s cubic-bezier(.23,1,.32,1);
+}
+@media(min-width:680px){
+  #stockModal{align-items:center}
+  .sm-sheet{border-radius:20px;max-height:80vh;max-width:560px}
+}
+.sm-handle{width:36px;height:4px;border-radius:2px;background:var(--border3);margin:12px auto 0}
+.sm-hdr{display:flex;justify-content:space-between;align-items:flex-start;padding:16px 20px 0}
+.sm-title{font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:-0.03em}
+.sm-sub{font-size:11px;color:var(--muted2);margin-top:2px}
+.sm-close{background:var(--bg4);border:none;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted2);font-size:16px;flex-shrink:0}
+.sm-price-row{display:flex;align-items:baseline;gap:10px;padding:10px 20px 0}
+.sm-price{font-family:var(--display);font-size:32px;font-weight:700;letter-spacing:-0.04em}
+.sm-chg{font-size:13px;font-weight:500}
+.sm-chg.up{color:var(--green)}
+.sm-chg.dn{color:var(--red)}
+.sm-chart-wrap{padding:12px 16px;height:180px;position:relative}
+.sm-period-bar{display:flex;gap:4px;padding:0 20px 10px}
+.sm-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 16px}
+.sm-stat{background:var(--bg3);border-radius:10px;padding:10px}
+.sm-stat-lbl{font-size:8px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase}
+.sm-stat-val{font-size:13px;font-weight:500;margin-top:4px}
+.sm-stat-val.pos{color:var(--green)}
+.sm-stat-val.neg{color:var(--red)}
+.sm-trades-hdr{font-size:9px;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;padding:0 20px 8px;border-top:1px solid var(--border);padding-top:14px}
+.sm-trade-row{display:flex;justify-content:space-between;align-items:center;padding:8px 20px;border-bottom:1px solid var(--border)}
+.sm-trade-row:last-child{border-bottom:none}
+
+/* ── EXPORT BUTTON ── */
+.export-btn{
+  display:flex;align-items:center;gap:7px;
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:8px;padding:8px 14px;
+  font-family:var(--mono);font-size:10px;color:var(--muted2);
+  cursor:pointer;transition:all 0.15s;width:100%;margin-top:10px;
+  justify-content:center;
+}
+.export-btn:hover{border-color:var(--border3);color:var(--text)}
+.export-btn:active{transform:scale(0.97)}
+.export-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;flex-shrink:0}
+
 /* ── TABLET / iPAD — sidebar icon-only ─────────────────────
    Cubre: iPad Mini portrait (744px), iPad portrait (768px),
    iPad Air portrait (820px) hasta antes del desktop
@@ -722,6 +779,16 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
         <div class="sec-title">Mis posiciones</div>
         <span style="font-size:10px;color:var(--muted)" id="posCount">0 activos</span>
       </div>
+      <div style="display:flex;gap:8px;margin-bottom:4px">
+        <button class="export-btn" onclick="exportPDF()">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          Exportar PDF
+        </button>
+        <button class="export-btn" onclick="exportCSV()">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Exportar CSV
+        </button>
+      </div>
     </div>
     <div class="pos-wrap" id="posList">
       <div class="empty"><span class="empty-icon">📊</span>Sin posiciones aún.<br>Registra tu primera compra →</div>
@@ -896,6 +963,41 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
       <span>Config</span>
     </button>
   </nav>
+</div>
+
+<!-- STOCK DETAIL MODAL -->
+<div id="stockModal" onclick="if(event.target===this)closeStockModal()">
+  <div class="sm-sheet">
+    <div class="sm-handle"></div>
+    <div class="sm-hdr">
+      <div>
+        <div class="sm-title" id="smTicker">—</div>
+        <div class="sm-sub" id="smName">—</div>
+      </div>
+      <button class="sm-close" onclick="closeStockModal()">✕</button>
+    </div>
+    <div class="sm-price-row">
+      <div class="sm-price" id="smPrice">—</div>
+      <div class="sm-chg" id="smChg">—</div>
+    </div>
+    <div class="sm-period-bar" id="smPeriodBar">
+      <button class="cp-btn active" onclick="setSmPeriod('1W',this)">1S</button>
+      <button class="cp-btn" onclick="setSmPeriod('1M',this)">1M</button>
+      <button class="cp-btn" onclick="setSmPeriod('3M',this)">3M</button>
+      <button class="cp-btn" onclick="setSmPeriod('1Y',this)">1A</button>
+    </div>
+    <div class="sm-chart-wrap"><canvas id="smChart"></canvas></div>
+    <div class="sm-stats">
+      <div class="sm-stat"><div class="sm-stat-lbl">Posición</div><div class="sm-stat-val" id="smQty">—</div></div>
+      <div class="sm-stat"><div class="sm-stat-lbl">Costo prom.</div><div class="sm-stat-val" id="smAvg">—</div></div>
+      <div class="sm-stat"><div class="sm-stat-lbl">Valor actual</div><div class="sm-stat-val" id="smVal">—</div></div>
+      <div class="sm-stat"><div class="sm-stat-lbl">P&L $</div><div class="sm-stat-val" id="smPL">—</div></div>
+      <div class="sm-stat"><div class="sm-stat-lbl">P&L %</div><div class="sm-stat-val" id="smPLPct">—</div></div>
+      <div class="sm-stat"><div class="sm-stat-lbl">Comisiones</div><div class="sm-stat-val" id="smComm">—</div></div>
+    </div>
+    <div class="sm-trades-hdr">Historial de trades</div>
+    <div id="smTrades"></div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1360,7 +1462,8 @@ function renderPositions(positions,totalVal){
     const chgCls=chg?(chg.dp>=0?'up':'dn'):'flat';
     const badgeCls=SBADGE[sec]||'pb-custom';
     const classStr=SCLASS[sec]||'';
-    return `<div class="pos-card ${classStr}">
+    return `<div class="pos-card ${classStr}" onclick="openStockModal('${p.ticker}')">
+      <div style="position:absolute;top:10px;right:10px;font-size:9px;color:var(--muted);letter-spacing:0.05em">VER →</div>
       <div class="pc-top">
         <div>
           <div class="pc-ticker">${p.ticker}</div>
@@ -1787,6 +1890,234 @@ function initCharts(){
       }
     }
   });
+}
+
+// ══════════════════════════════════════════════════════════
+// STOCK DETAIL MODAL
+// ══════════════════════════════════════════════════════════
+let smChartInst=null;
+let smCurrentTicker='';
+let smCurrentPeriod='1W';
+
+async function openStockModal(ticker){
+  smCurrentTicker=ticker;
+  smCurrentPeriod='1W';
+  document.getElementById('stockModal').classList.add('open');
+  document.body.style.overflow='hidden';
+
+  // Basic info
+  const positions=calcPositions();
+  const pos=positions.find(p=>p.ticker===ticker);
+  const price=liveP[ticker]||0;
+  const chg=liveChg[ticker];
+
+  document.getElementById('smTicker').textContent=ticker;
+  document.getElementById('smName').textContent=NAMES[ticker]||ticker;
+  document.getElementById('smPrice').textContent=price>0?'$'+price.toFixed(2):'—';
+  const smChgEl=document.getElementById('smChg');
+  if(chg){
+    smChgEl.textContent=(chg.dp>=0?'+':'')+chg.dp.toFixed(2)+'% hoy';
+    smChgEl.className='sm-chg '+(chg.dp>=0?'up':'dn');
+  } else { smChgEl.textContent='—'; smChgEl.className='sm-chg'; }
+
+  // Position stats
+  if(pos){
+    const avg=pos.costBasis/pos.qty;
+    const curVal=pos.qty*price;
+    const pl=curVal-pos.costBasis;
+    const plPct=pos.costBasis>0?(pl/pos.costBasis)*100:0;
+    document.getElementById('smQty').textContent=pos.qty.toFixed(4)+' acc';
+    document.getElementById('smAvg').textContent='$'+avg.toFixed(2);
+    document.getElementById('smVal').textContent=f$(curVal);
+    const plEl=document.getElementById('smPL');
+    plEl.textContent=(pl>=0?'+':'')+f$(pl);
+    plEl.className='sm-stat-val '+(pl>=0?'pos':'neg');
+    const plPctEl=document.getElementById('smPLPct');
+    plPctEl.textContent=(plPct>=0?'+':'')+plPct.toFixed(2)+'%';
+    plPctEl.className='sm-stat-val '+(plPct>=0?'pos':'neg');
+    document.getElementById('smComm').textContent=pos.totalCommission>0?'$'+pos.totalCommission.toFixed(2):'$0';
+  } else {
+    ['smQty','smAvg','smVal','smPL','smPLPct','smComm'].forEach(id=>document.getElementById(id).textContent='—');
+  }
+
+  // Trades for this ticker
+  const myTrades=trades.filter(t=>t.ticker===ticker);
+  document.getElementById('smTrades').innerHTML=myTrades.length
+    ? myTrades.map(t=>{
+        const comm=parseFloat(t.commission)||0;
+        return `<div class="sm-trade-row">
+          <div>
+            <div style="font-family:var(--display);font-size:12px;font-weight:600">${t.date}</div>
+            <div style="font-size:9px;color:var(--muted2);margin-top:1px">${parseFloat(t.qty).toFixed(4)} acc @ $${parseFloat(t.price).toFixed(2)}${comm>0?' · comisión $'+comm.toFixed(2):''}</div>
+            ${t.comment?`<div style="font-size:9px;color:var(--blue2);margin-top:2px;font-style:italic">💬 ${t.comment}</div>`:''}
+          </div>
+          <span class="hi-badge ${t.type}" style="align-self:flex-start">${t.type==='buy'?'COMPRA':'VENTA'}</span>
+        </div>`;
+      }).join('')
+    : '<div style="padding:12px 20px;font-size:11px;color:var(--muted)">No tienes trades de esta acción</div>';
+
+  // Draw chart
+  await loadSmChart(ticker, smCurrentPeriod);
+}
+
+function setSmPeriod(period, btn){
+  smCurrentPeriod=period;
+  document.querySelectorAll('.sm-period-bar .cp-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  loadSmChart(smCurrentTicker, period);
+}
+
+async function loadSmChart(ticker, period){
+  if(!apiKey) return;
+  // Map period to Finnhub resolution and from timestamp
+  const now=Math.floor(Date.now()/1000);
+  let from, resolution;
+  if(period==='1W'){from=now-7*86400;resolution='60';}
+  else if(period==='1M'){from=now-30*86400;resolution='D';}
+  else if(period==='3M'){from=now-90*86400;resolution='D';}
+  else{from=now-365*86400;resolution='W';}
+
+  try{
+    const r=await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${ticker}&resolution=${resolution}&from=${from}&to=${now}&token=${apiKey}`);
+    if(!r.ok) return;
+    const d=await r.json();
+    if(!d||d.s!=='ok'||!d.c||!d.c.length) return;
+
+    const labels=d.t.map(ts=>{
+      const dt=new Date(ts*1000);
+      if(resolution==='60') return dt.toLocaleDateString('es-CO',{weekday:'short',day:'2-digit'});
+      return dt.toLocaleDateString('es-CO',{day:'2-digit',month:'short'});
+    });
+
+    const isUp=d.c[d.c.length-1]>=d.c[0];
+    const color=isUp?'#00c97d':'#ff4646';
+    const bgColor=isUp?'rgba(0,201,125,0.06)':'rgba(255,70,70,0.06)';
+
+    const ctx=document.getElementById('smChart').getContext('2d');
+    if(smChartInst) smChartInst.destroy();
+    smChartInst=new Chart(ctx,{
+      type:'line',
+      data:{
+        labels,
+        datasets:[{
+          data:d.c,fill:true,
+          backgroundColor:bgColor,borderColor:color,
+          borderWidth:1.5,pointRadius:0,tension:0.3
+        }]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'$'+ctx.raw.toFixed(2)}}},
+        scales:{
+          x:{grid:{display:false},ticks:{color:'#52526a',font:{size:8},maxTicksLimit:6}},
+          y:{grid:{color:'rgba(255,255,255,0.03)'},ticks:{color:'#52526a',font:{size:8},callback:v=>'$'+v.toFixed(0)},position:'right'}
+        }
+      }
+    });
+  }catch(e){console.warn('smChart:',e);}
+}
+
+function closeStockModal(){
+  document.getElementById('stockModal').classList.remove('open');
+  document.body.style.overflow='';
+  if(smChartInst){smChartInst.destroy();smChartInst=null;}
+}
+
+// ══════════════════════════════════════════════════════════
+// EXPORT — PDF y CSV
+// ══════════════════════════════════════════════════════════
+function exportCSV(){
+  if(!trades.length){toast('⚠️ No hay operaciones para exportar');return;}
+  const header=['Fecha','Ticker','Tipo','Cantidad','Precio USD','Comisión USD','Total USD','Sector','Comentario'];
+  const rows=trades.map(t=>{
+    const qty=parseFloat(t.qty);
+    const price=parseFloat(t.price);
+    const comm=parseFloat(t.commission)||0;
+    const total=t.type==='buy'?qty*price+comm:qty*price-comm;
+    return [t.date,t.ticker,t.type==='buy'?'COMPRA':'VENTA',qty.toFixed(4),price.toFixed(2),comm.toFixed(2),total.toFixed(2),t.sector||'',t.comment||''];
+  });
+  const csv=[header,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`EduPortfolio_${today()}.csv`;a.click();
+  URL.revokeObjectURL(url);
+  toast('✓ CSV descargado');
+}
+
+function exportPDF(){
+  const positions=calcPositions();
+  if(!positions.length){toast('⚠️ No hay posiciones para exportar');return;}
+
+  const totalVal=positions.reduce((s,p)=>s+p.qty*(liveP[p.ticker]||p.costBasis/p.qty),0);
+  const totalCost=positions.reduce((s,p)=>s+p.costBasis,0);
+  const totalPL=totalVal-totalCost;
+  const plPct=totalCost>0?(totalPL/totalCost)*100:0;
+  const now=new Date().toLocaleDateString('es-CO',{year:'numeric',month:'long',day:'2-digit'});
+
+  const rows=positions.map(p=>{
+    const price=liveP[p.ticker]||p.costBasis/p.qty;
+    const curVal=p.qty*price;
+    const pl=curVal-p.costBasis;
+    const plPct=p.costBasis>0?(pl/p.costBasis)*100:0;
+    const alloc=totalVal>0?(curVal/totalVal)*100:0;
+    const plColor=pl>=0?'#00c97d':'#ff4646';
+    return `<tr>
+      <td style="font-weight:600;font-size:13px">${p.ticker}</td>
+      <td style="color:#7f7f9a;font-size:11px">${NAMES[p.ticker]||p.ticker}</td>
+      <td>${p.qty.toFixed(4)}</td>
+      <td>$${(p.costBasis/p.qty).toFixed(2)}</td>
+      <td>$${price.toFixed(2)}</td>
+      <td>$${curVal.toFixed(2)}</td>
+      <td style="color:${plColor};font-weight:600">${pl>=0?'+':''}$${Math.abs(pl).toFixed(2)}</td>
+      <td style="color:${plColor}">${plPct>=0?'+':''}${plPct.toFixed(2)}%</td>
+      <td>${alloc.toFixed(1)}%</td>
+      ${p.totalCommission>0?`<td style="color:#f0a500">$${p.totalCommission.toFixed(2)}</td>`:'<td>—</td>'}
+    </tr>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>E.Portfolio — Reporte ${now}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Helvetica Neue',Arial,sans-serif;background:#060609;color:#e8e8f0;padding:40px;font-size:12px}
+    h1{font-size:28px;font-weight:700;letter-spacing:-0.04em;margin-bottom:4px}
+    h1 em{color:#3d6fff;font-style:normal}
+    .sub{color:#52526a;font-size:11px;margin-bottom:32px}
+    .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px}
+    .s-card{background:#0d0d14;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px}
+    .s-lbl{font-size:9px;color:#52526a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px}
+    .s-val{font-size:20px;font-weight:700;letter-spacing:-0.03em}
+    .pos{color:#00c97d}.neg{color:#ff4646}
+    table{width:100%;border-collapse:collapse;background:#0d0d14;border-radius:12px;overflow:hidden}
+    th{background:#13131c;color:#52526a;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;padding:10px 12px;text-align:left;font-weight:500}
+    td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:11px}
+    tr:last-child td{border-bottom:none}
+    .footer{margin-top:24px;font-size:9px;color:#52526a;text-align:center}
+  </style></head><body>
+  <h1>E<em>.</em>Portfolio</h1>
+  <div class="sub">Reporte generado el ${now} · ${positions.length} posiciones activas</div>
+  <div class="summary">
+    <div class="s-card"><div class="s-lbl">Valor total</div><div class="s-val">$${totalVal.toFixed(2)}</div></div>
+    <div class="s-card"><div class="s-lbl">Capital invertido</div><div class="s-val">$${totalCost.toFixed(2)}</div></div>
+    <div class="s-card"><div class="s-lbl">P&L total</div><div class="s-val ${totalPL>=0?'pos':'neg'}">${totalPL>=0?'+':''}$${Math.abs(totalPL).toFixed(2)}</div></div>
+    <div class="s-card"><div class="s-lbl">Rendimiento</div><div class="s-val ${plPct>=0?'pos':'neg'}">${plPct>=0?'+':''}${plPct.toFixed(2)}%</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Ticker</th><th>Nombre</th><th>Cantidad</th><th>Costo prom.</th>
+      <th>Precio actual</th><th>Valor</th><th>P&L $</th><th>P&L %</th><th>Asignación</th><th>Comisiones</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">E.Portfolio · Edu + Claude · Datos: Finnhub · ${now}</div>
+  </body></html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const w=window.open(url,'_blank');
+  setTimeout(()=>{if(w){w.print();}URL.revokeObjectURL(url);},800);
+  toast('✓ PDF listo para imprimir');
 }
 
 // ══════════════════════════════════════════════════════════
