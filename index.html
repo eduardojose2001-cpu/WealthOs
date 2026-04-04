@@ -786,9 +786,19 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
             <input type="number" id="fPrice" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
           </div>
         </div>
+        <div class="form-row">
+          <div class="fg">
+            <label>Comisión USD <span style="color:var(--muted);font-weight:300">(opcional)</span></label>
+            <input type="number" id="fCommission" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+          </div>
+          <div class="fg">
+            <label>Fecha</label>
+            <input type="date" id="fDate">
+          </div>
+        </div>
         <div class="fg full" style="margin-bottom:14px">
-          <label>Fecha</label>
-          <input type="date" id="fDate">
+          <label>Comentario <span style="color:var(--muted);font-weight:300">(opcional)</span></label>
+          <input type="text" id="fComment" placeholder="Ej: DCA mensual, stop loss, rebalanceo..." maxlength="200" autocomplete="off">
         </div>
         <button class="btn-main" id="addBtn" onclick="addTrade()">+ Registrar operación</button>
       </div>
@@ -1190,10 +1200,12 @@ async function addTrade(){
   const qty=parseFloat(document.getElementById('fQty').value);
   const price=parseFloat(document.getElementById('fPrice').value);
   const date=document.getElementById('fDate').value;
+  const commission=parseFloat(document.getElementById('fCommission').value)||0;
+  const comment=document.getElementById('fComment').value.trim();
   if(!ticker||!qty||!price||!date){toast('⚠️ Completa todos los campos');return;}
   const btn=document.getElementById('addBtn');
   btn.classList.add('loading');btn.textContent='';
-  const trade={ticker,type,qty,price,date,sector:SECTOR[ticker]||'custom'};
+  const trade={ticker,type,qty,price,date,sector:SECTOR[ticker]||'custom',commission,comment};
   try{
     const result=await sbInsert('trades',trade);
     const saved=Array.isArray(result)?result[0]:result;
@@ -1202,6 +1214,8 @@ async function addTrade(){
     document.getElementById('fTicker').value='';
     document.getElementById('fQty').value='';
     document.getElementById('fPrice').value='';
+    document.getElementById('fCommission').value='';
+    document.getElementById('fComment').value='';
     setLastSync();render();
     if(!liveP[ticker]||liveP[ticker]===FBFALL[ticker]) refreshPrices();
   }catch(e){toast('⚠️ Error al guardar: '+e.message);}
@@ -1271,12 +1285,17 @@ function buildTape(tickers){
 function calcPositions(){
   const pos={};
   [...trades].reverse().forEach(t=>{
-    if(!pos[t.ticker]) pos[t.ticker]={ticker:t.ticker,qty:0,costBasis:0,sector:t.sector||SECTOR[t.ticker]||'custom'};
-    if(t.type==='buy'){pos[t.ticker].qty+=parseFloat(t.qty);pos[t.ticker].costBasis+=parseFloat(t.qty)*parseFloat(t.price);}
-    else{
+    if(!pos[t.ticker]) pos[t.ticker]={ticker:t.ticker,qty:0,costBasis:0,totalCommission:0,sector:t.sector||SECTOR[t.ticker]||'custom'};
+    const comm=parseFloat(t.commission)||0;
+    if(t.type==='buy'){
+      pos[t.ticker].qty+=parseFloat(t.qty);
+      pos[t.ticker].costBasis+=parseFloat(t.qty)*parseFloat(t.price)+comm; // commission adds to cost
+      pos[t.ticker].totalCommission+=comm;
+    } else {
       const avg=pos[t.ticker].qty>0?pos[t.ticker].costBasis/pos[t.ticker].qty:0;
       pos[t.ticker].qty-=parseFloat(t.qty);
       pos[t.ticker].costBasis-=parseFloat(t.qty)*avg;
+      pos[t.ticker].totalCommission+=comm;
     }
   });
   return Object.values(pos).filter(p=>p.qty>0.00009);
@@ -1357,6 +1376,7 @@ function renderPositions(positions,totalVal){
         <div>
           <div class="pc-stat-lbl">Cantidad · Costo prom.</div>
           <div class="pc-stat-val">${p.qty.toFixed(4)} · $${avg.toFixed(2)}</div>
+          ${p.totalCommission>0?`<div style="font-size:8px;color:var(--amber);margin-top:2px">Comisiones: $${p.totalCommission.toFixed(2)}</div>`:''}
         </div>
         <div>
           <div class="pc-pl-val ${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${f$(pl)}</div>
@@ -1677,15 +1697,24 @@ function renderCalendar(positions){
 function renderHistory(){
   const el=document.getElementById('histList');
   if(!trades.length){el.innerHTML='<div class="empty" style="padding:1rem 0;font-size:11px">Sin operaciones</div>';return;}
-  el.innerHTML=trades.slice(0,25).map(t=>`
-    <div class="hist-item">
-      <div><div class="hi-sym">${t.ticker}</div><div class="hi-date">${t.date}</div></div>
-      <div>
-        <div style="text-align:right"><span class="hi-badge ${t.type}">${t.type==='buy'?'COMPRA':'VENTA'}</span></div>
-        <div class="hi-amount">$${(parseFloat(t.qty)*parseFloat(t.price)).toFixed(2)}</div>
-        <div class="hi-sub">${parseFloat(t.qty).toFixed(4)} acc @ $${parseFloat(t.price).toFixed(2)}</div>
+  el.innerHTML=trades.slice(0,25).map(t=>{
+    const gross=(parseFloat(t.qty)*parseFloat(t.price));
+    const comm=parseFloat(t.commission)||0;
+    const total=t.type==='buy'?gross+comm:gross-comm;
+    const commStr=comm>0?`<span style="color:var(--amber)">−$${comm.toFixed(2)} comisión</span>`:'';
+    const commentStr=t.comment?`<div style="font-size:9px;color:var(--blue2);margin-top:3px;font-style:italic;padding:3px 6px;background:rgba(61,111,255,0.06);border-radius:4px;border-left:2px solid var(--blue)">💬 ${t.comment}</div>`:'';
+    return `<div class="hist-item" style="flex-direction:column;align-items:stretch;gap:4px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div><div class="hi-sym">${t.ticker}</div><div class="hi-date">${t.date}</div></div>
+        <div>
+          <div style="text-align:right"><span class="hi-badge ${t.type}">${t.type==='buy'?'COMPRA':'VENTA'}</span></div>
+          <div class="hi-amount">$${total.toFixed(2)}</div>
+          <div class="hi-sub">${parseFloat(t.qty).toFixed(4)} @ $${parseFloat(t.price).toFixed(2)}${comm>0?' · '+commStr:''}</div>
+        </div>
       </div>
-    </div>`).join('');
+      ${commentStr}
+    </div>`;
+  }).join('');
 }
 
 function renderRecs(positions,totalVal){
