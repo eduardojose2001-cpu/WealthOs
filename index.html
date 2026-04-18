@@ -4659,19 +4659,12 @@ a:focus-visible {
   </div>
 
   <div class="lock-card glass">
-    <div id="lockModeToggle" style="display:flex;gap:0;margin-bottom:2px;border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border-default)">
-      <button id="lockTabLogin" onclick="setLockMode('login')" style="flex:1;padding:8px;font-family:var(--font-ui);font-size:var(--fs-xs);font-weight:600;border:none;cursor:pointer;transition:background 0.2s,color 0.2s;background:var(--sapphire);color:#fff">Iniciar sesión</button>
-      <button id="lockTabSignup" onclick="setLockMode('signup')" style="flex:1;padding:8px;font-family:var(--font-ui);font-size:var(--fs-xs);font-weight:600;border:none;cursor:pointer;transition:background 0.2s,color 0.2s;background:var(--bg-overlay);color:var(--text-muted)">Crear cuenta</button>
-    </div>
-    <div class="lock-field-label" style="margin-top:4px">Email</div>
-    <input class="lock-input" type="email" id="lockEmail" placeholder="tu@email.com" maxlength="120"
-      style="letter-spacing:0;text-align:left;font-size:14px"
-      onkeydown="if(event.key==='Enter')document.getElementById('lockPassword').focus()">
-    <div class="lock-field-label">Contraseña</div>
-    <input class="lock-input" type="password" id="lockPassword" placeholder="••••••••" maxlength="128"
-      onkeydown="if(event.key==='Enter')authSubmit()">
+    <div class="lock-field-label">Frase de acceso</div>
+    <input class="lock-input" type="password" id="lockPassphrase" placeholder="••••••••••••"
+      maxlength="128" autocomplete="current-password" spellcheck="false"
+      onkeydown="if(event.key==='Enter')checkPassphrase()">
     <div class="lock-error" id="lockError"></div>
-    <button class="lock-btn" id="lockBtn" onclick="authSubmit()">Iniciar sesión</button>
+    <button class="lock-btn" id="lockBtn" onclick="checkPassphrase()">Acceder</button>
   </div>
 </div>
 
@@ -5803,9 +5796,8 @@ a:focus-visible {
             <button class="btn-secondary" style="margin-top:8px;width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px" onclick="resetOnboarding()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5-10-5z"/><path d="M6 11v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/><path d="M22 9v4"/></svg>Repetir tour de inicio</button>
           </div>
           <div class="set-card glass">
-            <div class="set-card-title">Cuenta</div>
-            <div class="set-row"><span class="set-key">Email</span><span class="set-val" id="setUserEmail" style="font-family:var(--font-mono);color:var(--text-secondary);word-break:break-all">—</span></div>
-            <div class="set-row"><span class="set-key">Sesión</span><span class="set-val" style="color:var(--emerald)">Activa</span></div>
+            <div class="set-card-title">Sesión</div>
+            <div class="set-row"><span class="set-key">Acceso</span><span class="set-val" style="color:var(--emerald)">Activo</span></div>
             <button class="btn-danger" style="margin-top:12px;display:inline-flex;align-items:center;justify-content:center;gap:8px" onclick="signOut()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Cerrar sesión</button>
           </div>
         </div>
@@ -6104,229 +6096,117 @@ a:focus-visible {
   <div class="undo-toast-bar" id="undoToastBar"></div>
 </div>
 <script>
-// ═══════════════════════════════ AUTH — Supabase Auth via REST
-// ── Token storage ────────────────────────────────────────────────────
-const AUTH_KEY = 'wos_auth';
-function _saveSession(session){
-  if(!session) return;
-  localStorage.setItem(AUTH_KEY, JSON.stringify({
-    access_token:  session.access_token,
-    refresh_token: session.refresh_token,
-    expires_at:    session.expires_at || Math.floor(Date.now()/1000) + (session.expires_in || 3600),
-    user_email:    session.user?.email || session.user_email || ''
-  }));
-}
-function _loadSession(){
-  try{ return JSON.parse(localStorage.getItem(AUTH_KEY)); } catch(e){ return null; }
-}
-function _clearSession(){
-  localStorage.removeItem(AUTH_KEY);
+// ═══════════════════════════════ AUTH — frase de acceso verificada en Supabase
+// El hash SHA-256 de la frase vive en Supabase (tabla wos_config), nunca aquí.
+const AUTH_SESSION_KEY = 'wos_unlocked';
+const _LOGIN_MAX = 5;
+const _LOCKOUT_SEC = 30;
+let _failCount = 0;
+let _lockTimer = null;
+
+async function _sha256(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
-// ── Token refresh ────────────────────────────────────────────────────
-async function _refreshToken(){
-  const sess = _loadSession();
-  if(!sess?.refresh_token) throw new Error('no_session');
-  const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SB_KEY},
-    body:JSON.stringify({refresh_token: sess.refresh_token})
-  });
-  if(!r.ok){ _clearSession(); throw new Error('refresh_failed'); }
-  const data = await r.json();
-  _saveSession(data);
-  return data.access_token;
-}
-
-async function _getValidToken(){
-  const sess = _loadSession();
-  if(!sess) throw new Error('no_session');
-  const now = Math.floor(Date.now()/1000);
-  // Refresh if token expires within 60s
-  if(sess.expires_at - now < 60){
-    return await _refreshToken();
-  }
-  return sess.access_token;
-}
-
-// ── Auth API calls ───────────────────────────────────────────────────
-async function signIn(email, password){
-  const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=password`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SB_KEY},
-    body:JSON.stringify({email, password})
-  });
-  const data = await r.json();
-  if(!r.ok) throw new Error(data.error_description || data.msg || 'Error al iniciar sesión');
-  _saveSession({...data, user_email: data.user?.email || email});
-  return data;
-}
-
-async function signUp(email, password){
-  const r = await fetch(`${SB_URL}/auth/v1/signup`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SB_KEY},
-    body:JSON.stringify({email, password})
-  });
-  const data = await r.json();
-  if(!r.ok) throw new Error(data.error_description || data.msg || 'Error al crear cuenta');
-  return data;
-}
-
-async function signOut(){
-  try{
-    const token = _loadSession()?.access_token;
-    if(token){
-      await fetch(`${SB_URL}/auth/v1/logout`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+token}
-      });
-    }
-  } catch(e){}
-  _clearSession();
-  _showLockScreen();
-}
-
-// ── Lock screen helpers ──────────────────────────────────────────────
-let _lockMode = 'login'; // 'login' | 'signup'
-
-function setLockMode(mode){
-  _lockMode = mode;
-  const tabLogin  = document.getElementById('lockTabLogin');
-  const tabSignup = document.getElementById('lockTabSignup');
-  const btn       = document.getElementById('lockBtn');
-  if(mode === 'login'){
-    tabLogin.style.background  = 'var(--sapphire)'; tabLogin.style.color  = '#fff';
-    tabSignup.style.background = 'var(--bg-overlay)'; tabSignup.style.color = 'var(--text-muted)';
-    btn.textContent = 'Iniciar sesión';
-  } else {
-    tabSignup.style.background = 'var(--sapphire)'; tabSignup.style.color  = '#fff';
-    tabLogin.style.background  = 'var(--bg-overlay)'; tabLogin.style.color = 'var(--text-muted)';
-    btn.textContent = 'Crear cuenta';
-  }
-  document.getElementById('lockError').textContent = '';
-}
+function _setUnlocked(){ sessionStorage.setItem(AUTH_SESSION_KEY,'1'); }
+function _isUnlocked(){ return sessionStorage.getItem(AUTH_SESSION_KEY)==='1'; }
+function _lock(){ sessionStorage.removeItem(AUTH_SESSION_KEY); }
 
 function _showLockScreen(){
-  document.getElementById('app').style.display     = 'none';
-  document.getElementById('splash').style.display  = 'none';
+  document.getElementById('app').style.display    = 'none';
+  document.getElementById('splash').style.display = 'none';
   document.getElementById('lockScreen').style.display = 'flex';
-  setLockMode('login');
-  setTimeout(()=>{
-    document.getElementById('lockEmail')?.focus();
-  }, 200);
+  setTimeout(()=>document.getElementById('lockPassphrase')?.focus(), 200);
 }
 
-async function authSubmit(){
-  const btn   = document.getElementById('lockBtn');
-  const err   = document.getElementById('lockError');
-  const email = (document.getElementById('lockEmail')?.value || '').trim();
-  const pass  = document.getElementById('lockPassword')?.value || '';
+function _startLockout(){
+  const btn = document.getElementById('lockBtn');
+  const inp = document.getElementById('lockPassphrase');
+  const err = document.getElementById('lockError');
+  let rem = _LOCKOUT_SEC;
+  btn.disabled = true; inp.disabled = true; inp.value = '';
+  const tick = ()=>{
+    err.textContent = `Demasiados intentos. Espera ${rem}s`;
+    err.style.color = 'var(--ruby)';
+    if(rem <= 0){
+      clearInterval(_lockTimer); _lockTimer = null; _failCount = 0;
+      btn.disabled = false; inp.disabled = false;
+      err.textContent = ''; err.style.color = '';
+      inp.focus();
+    }
+    rem--;
+  };
+  tick(); _lockTimer = setInterval(tick, 1000);
+}
 
+async function checkPassphrase(){
+  if(_lockTimer) return;
+  const inp = document.getElementById('lockPassphrase');
+  const err = document.getElementById('lockError');
+  const btn = document.getElementById('lockBtn');
+  const val = inp.value;
+  if(!val){ err.textContent = 'Ingresa la frase de acceso'; return; }
+
+  btn.disabled = true; btn.textContent = 'Verificando...';
   err.textContent = '';
-  if(!email || !pass){
-    err.textContent = 'Ingresa tu email y contraseña';
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = _lockMode === 'login' ? 'Iniciando...' : 'Creando cuenta...';
 
   try{
-    if(_lockMode === 'signup'){
-      const data = await signUp(email, pass);
-      // Supabase may require email confirmation
-      if(data.user && !data.access_token){
-        err.style.color = 'var(--emerald)';
-        err.textContent = 'Revisa tu correo para confirmar la cuenta, luego inicia sesión.';
-        setLockMode('login');
-        btn.disabled = false;
-        btn.textContent = 'Iniciar sesión';
-        return;
-      }
-      // Auto-login if session returned
-      if(data.access_token){
-        _saveSession({...data, user_email: data.user?.email || email});
-        _onAuthSuccess();
-        return;
-      }
-      err.style.color = 'var(--emerald)';
-      err.textContent = 'Cuenta creada. Verifica tu correo e inicia sesión.';
-      setLockMode('login');
+    const hash = await _sha256(val);
+    const r = await fetch(`${SB_URL}/rest/v1/wos_config?select=value&key=eq.passphrase_hash&limit=1`,{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(!r.ok) throw new Error('No se pudo conectar a Supabase');
+    const rows = await r.json();
+    if(!rows.length) throw new Error('Frase no configurada — ver guía de setup');
+    const stored = rows[0].value;
+    if(hash === stored){
+      _failCount = 0;
+      _setUnlocked();
+      document.getElementById('lockScreen').style.display = 'none';
+      document.getElementById('splash').style.display = 'flex';
+      bootApp();
     } else {
-      await signIn(email, pass);
-      _onAuthSuccess();
+      _failCount++;
+      inp.classList.add('error'); inp.value = '';
+      setTimeout(()=>inp.classList.remove('error'), 1500);
+      if(_failCount >= _LOGIN_MAX){
+        _startLockout();
+      } else {
+        const left = _LOGIN_MAX - _failCount;
+        err.style.color = 'var(--ruby)';
+        err.textContent = `Frase incorrecta · ${left} intento${left===1?'':'s'} restante${left===1?'':'s'}`;
+        setTimeout(()=>{ err.textContent=''; err.style.color=''; }, 2000);
+      }
     }
   } catch(e){
-    err.style.color = '';
-    const msg = e.message || 'Error de red';
-    document.getElementById('lockPassword').classList.add('error');
-    document.getElementById('lockEmail').classList.add('error');
-    setTimeout(()=>{
-      document.getElementById('lockPassword')?.classList.remove('error');
-      document.getElementById('lockEmail')?.classList.remove('error');
-    }, 1500);
-    err.textContent = msg;
+    err.style.color = 'var(--ruby)';
+    err.textContent = e.message || 'Error de red — verifica conexión';
   }
 
-  btn.disabled = false;
-  btn.textContent = _lockMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
-}
-
-function _onAuthSuccess(){
-  // Update SB headers with real token
-  const token = _loadSession()?.access_token;
-  if(token) _updateSBHeaders(token);
-  // Update settings email display
-  const sess = _loadSession();
-  const emailEl = document.getElementById('setUserEmail');
-  if(emailEl && sess?.user_email) emailEl.textContent = sess.user_email;
-
-  document.getElementById('lockScreen').style.display = 'none';
-  document.getElementById('splash').style.display = 'flex';
-  bootApp();
+  btn.disabled = false; btn.textContent = 'Acceder';
 }
 
 function checkAuth(){
-  const sess = _loadSession();
-  if(sess?.access_token){
-    // Update SB headers eagerly; token refresh will happen before first real request
-    _updateSBHeaders(sess.access_token);
-    const emailEl = document.getElementById('setUserEmail');
-    if(emailEl && sess.user_email) emailEl.textContent = sess.user_email;
-    return true;
-  }
+  if(_isUnlocked()) return true;
   _showLockScreen();
   return false;
+}
+
+function signOut(){
+  _lock();
+  _showLockScreen();
 }
 
 // ═══════════════════════════════ SUPABASE REST
 const SB_URL='https://sskfbweoikcdcbiwqygv.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNza2Zid2VvaWtjZGNiaXdxeWd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ3NTMzNDYsImV4cCI6MjA2MDMyOTM0Nn0.1x2li855c8pHTD8U_VmMw2xDmiufyjBG3bDPO21Gd_c';
-
-// Mutable headers — updated on login and token refresh
-let HDR={headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}};
-function _updateSBHeaders(token){
-  HDR={headers:{'apikey':SB_KEY,'Authorization':'Bearer '+(token||SB_KEY)}};
-}
-
-// Ensure a valid token is present before every DB request
-async function _ensureAuth(){
-  try{
-    const token = await _getValidToken();
-    _updateSBHeaders(token);
-  } catch(e){
-    _clearSession();
-    _showLockScreen();
-    throw new Error('session_expired');
-  }
-}
-
+const HDR={headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}};
 const SB={
-  async get(t,q=''){await _ensureAuth();const r=await fetch(`${SB_URL}/rest/v1/${t}?${q}`,HDR);if(!r.ok)throw new Error(await r.text());return r.json();},
-  async post(t,b){await _ensureAuth();const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{...HDR.headers,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());return r.json();},
-  async del(t,f){await _ensureAuth();const r=await fetch(`${SB_URL}/rest/v1/${t}?${f}`,{method:'DELETE',headers:HDR.headers});if(!r.ok)throw new Error(await r.text());return true;},
-  async patch(t,f,b){await _ensureAuth();const r=await fetch(`${SB_URL}/rest/v1/${t}?${f}`,{method:'PATCH',headers:{...HDR.headers,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());return r.json();}
+  async get(t,q=''){const r=await fetch(`${SB_URL}/rest/v1/${t}?${q}`,HDR);if(!r.ok)throw new Error(await r.text());return r.json();},
+  async post(t,b){const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{...HDR.headers,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());return r.json();},
+  async del(t,f){const r=await fetch(`${SB_URL}/rest/v1/${t}?${f}`,{method:'DELETE',headers:HDR.headers});if(!r.ok)throw new Error(await r.text());return true;},
+  async patch(t,f,b){const r=await fetch(`${SB_URL}/rest/v1/${t}?${f}`,{method:'PATCH',headers:{...HDR.headers,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());return r.json();}
 };
 
 // ═══════════════════════════════ CONSTANTS
@@ -6563,10 +6443,6 @@ async function bootApp(){
   document.getElementById('fiStart').value=today();
   if(apiKey) document.getElementById('setKey').value=apiKey;
   document.getElementById('setCOP').value=copRate;
-  // ── Populate session email in settings ──
-  const _sess = _loadSession();
-  const _emailEl = document.getElementById('setUserEmail');
-  if(_emailEl && _sess?.user_email) _emailEl.textContent = _sess.user_email;
   document.getElementById('crySymbol').addEventListener('change',function(){
     document.getElementById('cryCustomRow').style.display=this.value==='OTHER'?'block':'none';
   });
