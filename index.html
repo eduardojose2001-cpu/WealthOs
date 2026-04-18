@@ -6105,28 +6105,39 @@ let _failCount = 0;
 let _lockTimer = null;
 
 function _sha256(str){
-  // Pure JS SHA-256 — no crypto.subtle needed, works in all browsers/contexts
-  function rightRotate(v,a){return (v>>>a)|(v<<(32-a));}
-  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
-  let h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
-  const bytes=new TextEncoder().encode(str);
-  const len=bytes.length;
-  const bitLen=len*8;
-  const padLen=((len+9)%64<=0?64:64-((len+9)%64))+len+9-len;
-  const padded=new Uint8Array(len+padLen+1);
-  padded.set(bytes);padded[len]=0x80;
-  const view=new DataView(padded.buffer);
-  view.setUint32(padded.length-4,bitLen&0xffffffff,false);
-  view.setUint32(padded.length-8,Math.floor(bitLen/0x100000000),false);
-  for(let i=0;i<padded.length;i+=64){
-    const w=new Array(64);
-    for(let j=0;j<16;j++) w[j]=view.getUint32(i+j*4,false);
-    for(let j=16;j<64;j++){const s0=(rightRotate(w[j-15],7)^rightRotate(w[j-15],18)^(w[j-15]>>>3))|0;const s1=(rightRotate(w[j-2],17)^rightRotate(w[j-2],19)^(w[j-2]>>>10))|0;w[j]=(w[j-16]+s0+w[j-7]+s1)|0;}
-    let [a,b,c,d,e,f,g,hh]=h;
-    for(let j=0;j<64;j++){const S1=(rightRotate(e,6)^rightRotate(e,11)^rightRotate(e,25))|0;const ch=((e&f)^(~e&g))|0;const tmp1=(hh+S1+ch+K[j]+w[j])|0;const S0=(rightRotate(a,2)^rightRotate(a,13)^rightRotate(a,22))|0;const maj=((a&b)^(a&c)^(b&c))|0;const tmp2=(S0+maj)|0;hh=g;g=f;f=e;e=(d+tmp1)|0;d=c;c=b;b=a;a=(tmp1+tmp2)|0;}
-    h[0]=(h[0]+a)|0;h[1]=(h[1]+b)|0;h[2]=(h[2]+c)|0;h[3]=(h[3]+d)|0;h[4]=(h[4]+e)|0;h[5]=(h[5]+f)|0;h[6]=(h[6]+g)|0;h[7]=(h[7]+hh)|0;
+  function n(n){return n<0?n+4294967296:n;}
+  function e(n,t){return n>>>t|n<<32-t;}
+  const o=[1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298];
+  const t=[1779033703,3144134277,1013904242,2773480762,1359893119,2600822924,528734635,1541325305];
+  const r=new TextEncoder().encode(str);
+  const i=r.length;
+  const s=new Uint8Array(((i+9>>6)+1)<<6);
+  s.set(r);s[i]=128;
+  const a=new DataView(s.buffer);
+  a.setUint32(s.length-4,(i<<3)>>>0,false);
+  const c=t.slice();
+  for(let p=0;p<s.length;p+=64){
+    const w=new Int32Array(64);
+    for(let j=0;j<16;j++) w[j]=a.getInt32(p+j*4,false);
+    for(let j=16;j<64;j++){
+      const s0=e(w[j-15],7)^e(w[j-15],18)^w[j-15]>>>3;
+      const s1=e(w[j-2],17)^e(w[j-2],19)^w[j-2]>>>10;
+      w[j]=n(w[j-16]+s0+w[j-7]+s1);
+    }
+    let[A,B,C,D,E,F,G,H]=c;
+    for(let j=0;j<64;j++){
+      const S1=e(E,6)^e(E,11)^e(E,25);
+      const ch=E&F^~E&G;
+      const t1=n(H+S1+ch+o[j]+w[j]);
+      const S0=e(A,2)^e(A,13)^e(A,22);
+      const maj=A&B^A&C^B&C;
+      const t2=n(S0+maj);
+      H=G;G=F;F=E;E=n(D+t1);D=C;C=B;B=A;A=n(t1+t2);
+    }
+    c[0]=n(c[0]+A);c[1]=n(c[1]+B);c[2]=n(c[2]+C);c[3]=n(c[3]+D);
+    c[4]=n(c[4]+E);c[5]=n(c[5]+F);c[6]=n(c[6]+G);c[7]=n(c[7]+H);
   }
-  return h.map(v=>(v>>>0).toString(16).padStart(8,'0')).join('');
+  return c.map(v=>(v>>>0).toString(16).padStart(8,'0')).join('');
 }
 
 function _setUnlocked(){ sessionStorage.setItem(AUTH_SESSION_KEY,'1'); }
