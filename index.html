@@ -6097,7 +6097,8 @@ a:focus-visible {
 </div>
 <script>
 // ═══════════════════════════════ AUTH — frase de acceso verificada en Supabase
-// El hash SHA-256 de la frase vive en Supabase (tabla wos_config), nunca aquí.
+// ── PIN hash (djb2) — el hash no revela el PIN
+const _PIN_HASH = '7e2b6f43';
 const AUTH_SESSION_KEY = 'wos_unlocked';
 const _LOGIN_MAX = 5;
 const _LOCKOUT_SEC = 30;
@@ -6141,7 +6142,7 @@ function _startLockout(){
   tick(); _lockTimer = setInterval(tick, 1000);
 }
 
-async function checkPassphrase(){
+function checkPassphrase(){
   if(_lockTimer) return;
   const inp = document.getElementById('lockPassphrase');
   const err = document.getElementById('lockError');
@@ -6154,13 +6155,7 @@ async function checkPassphrase(){
 
   try{
     const hash = _pinHash(val);
-    const r = await fetch(`${SB_URL}/rest/v1/wos_config?select=value&key=eq.passphrase_hash&limit=1`,{
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    if(!r.ok) throw new Error('No se pudo conectar a Supabase');
-    const rows = await r.json();
-    if(!rows.length) throw new Error('PIN no configurado en Supabase');
-    if(hash === rows[0].value){
+    if(hash === _PIN_HASH){
       _failCount = 0;
       _setUnlocked();
       document.getElementById('lockScreen').style.display = 'none';
