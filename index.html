@@ -4659,9 +4659,9 @@ a:focus-visible {
   </div>
 
   <div class="lock-card glass">
-    <div class="lock-field-label">Frase de acceso</div>
-    <input class="lock-input" type="password" id="lockPassphrase" placeholder="••••••••••••"
-      maxlength="128" autocomplete="current-password" spellcheck="false"
+    <div class="lock-field-label">PIN de acceso</div>
+    <input class="lock-input" type="password" id="lockPassphrase" placeholder="······"
+      maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password"
       onkeydown="if(event.key==='Enter')checkPassphrase()">
     <div class="lock-error" id="lockError"></div>
     <button class="lock-btn" id="lockBtn" onclick="checkPassphrase()">Acceder</button>
@@ -6104,40 +6104,10 @@ const _LOCKOUT_SEC = 30;
 let _failCount = 0;
 let _lockTimer = null;
 
-function _sha256(str){
-  function n(n){return n<0?n+4294967296:n;}
-  function e(n,t){return n>>>t|n<<32-t;}
-  const o=[1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298];
-  const t=[1779033703,3144134277,1013904242,2773480762,1359893119,2600822924,528734635,1541325305];
-  const r=new TextEncoder().encode(str);
-  const i=r.length;
-  const s=new Uint8Array(((i+9>>6)+1)<<6);
-  s.set(r);s[i]=128;
-  const a=new DataView(s.buffer);
-  a.setUint32(s.length-4,(i<<3)>>>0,false);
-  const c=t.slice();
-  for(let p=0;p<s.length;p+=64){
-    const w=new Int32Array(64);
-    for(let j=0;j<16;j++) w[j]=a.getInt32(p+j*4,false);
-    for(let j=16;j<64;j++){
-      const s0=e(w[j-15],7)^e(w[j-15],18)^w[j-15]>>>3;
-      const s1=e(w[j-2],17)^e(w[j-2],19)^w[j-2]>>>10;
-      w[j]=n(w[j-16]+s0+w[j-7]+s1);
-    }
-    let[A,B,C,D,E,F,G,H]=c;
-    for(let j=0;j<64;j++){
-      const S1=e(E,6)^e(E,11)^e(E,25);
-      const ch=E&F^~E&G;
-      const t1=n(H+S1+ch+o[j]+w[j]);
-      const S0=e(A,2)^e(A,13)^e(A,22);
-      const maj=A&B^A&C^B&C;
-      const t2=n(S0+maj);
-      H=G;G=F;F=E;E=n(D+t1);D=C;C=B;B=A;A=n(t1+t2);
-    }
-    c[0]=n(c[0]+A);c[1]=n(c[1]+B);c[2]=n(c[2]+C);c[3]=n(c[3]+D);
-    c[4]=n(c[4]+E);c[5]=n(c[5]+F);c[6]=n(c[6]+G);c[7]=n(c[7]+H);
-  }
-  return c.map(v=>(v>>>0).toString(16).padStart(8,'0')).join('');
+function _pinHash(s){
+  let h=5381;
+  for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))&0xFFFFFFFF;
+  return (h>>>0).toString(16).padStart(8,'0');
 }
 
 function _setUnlocked(){ sessionStorage.setItem(AUTH_SESSION_KEY,'1'); }
@@ -6176,22 +6146,21 @@ async function checkPassphrase(){
   const inp = document.getElementById('lockPassphrase');
   const err = document.getElementById('lockError');
   const btn = document.getElementById('lockBtn');
-  const val = inp.value;
-  if(!val){ err.textContent = 'Ingresa la frase de acceso'; return; }
+  const val = inp.value.trim();
+  if(!val){ err.textContent = 'Ingresa tu PIN'; return; }
 
   btn.disabled = true; btn.textContent = 'Verificando...';
   err.textContent = '';
 
   try{
-    const hash = _sha256(val);
+    const hash = _pinHash(val);
     const r = await fetch(`${SB_URL}/rest/v1/wos_config?select=value&key=eq.passphrase_hash&limit=1`,{
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
     });
     if(!r.ok) throw new Error('No se pudo conectar a Supabase');
     const rows = await r.json();
-    if(!rows.length) throw new Error('Frase no configurada — ver guía de setup');
-    const stored = rows[0].value;
-    if(hash === stored){
+    if(!rows.length) throw new Error('PIN no configurado en Supabase');
+    if(hash === rows[0].value){
       _failCount = 0;
       _setUnlocked();
       document.getElementById('lockScreen').style.display = 'none';
@@ -6206,13 +6175,13 @@ async function checkPassphrase(){
       } else {
         const left = _LOGIN_MAX - _failCount;
         err.style.color = 'var(--ruby)';
-        err.textContent = `Frase incorrecta · ${left} intento${left===1?'':'s'} restante${left===1?'':'s'}`;
+        err.textContent = `PIN incorrecto · ${left} intento${left===1?'':'s'} restante${left===1?'':'s'}`;
         setTimeout(()=>{ err.textContent=''; err.style.color=''; }, 2000);
       }
     }
   } catch(e){
     err.style.color = 'var(--ruby)';
-    err.textContent = e.message || 'Error de red — verifica conexión';
+    err.textContent = e.message || 'Error de red';
   }
 
   btn.disabled = false; btn.textContent = 'Acceder';
