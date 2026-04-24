@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="WealthOS">
@@ -144,6 +144,7 @@
 ═══════════════════════════════════════════ */
 html {
   height: 100%;
+  height: -webkit-fill-available;
   overscroll-behavior: none;
 }
 
@@ -154,6 +155,7 @@ body {
   font-size: 14px;
   line-height: 1.5;
   min-height: 100%;
+  min-height: -webkit-fill-available;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
@@ -659,7 +661,7 @@ body::before {
 ═══════════════════════════════════════════ */
 #app {
   position: relative; z-index: 1;
-  display: flex; min-height: 100vh;
+  display: flex; min-height: 100vh; min-height: -webkit-fill-available;
   overflow-x: hidden;
   max-width: 100vw;
 }
@@ -839,9 +841,10 @@ body::before {
 /* ─── MAIN ─── */
 .main {
   flex: 1; margin-left: var(--sidebar-w);
-  min-height: 100vh; min-width: 0;
+  min-height: 100vh; min-height: -webkit-fill-available; min-width: 0;
   display: flex; flex-direction: column;
   overflow-x: hidden;
+  width: calc(100% - var(--sidebar-w));
 }
 
 /* ─── TICKER TAPE ─── */
@@ -2572,7 +2575,7 @@ body::before {
 ═══════════════════════════════════════════ */
 @media (max-width: 679px) {
   .sidebar  { display: none !important; }
-  .main     { margin-left: 0; }
+  .main     { margin-left: 0 !important; width: 100% !important; max-width: 100vw !important; }
   .mobile-header { display: flex !important; }
   .bottom-nav    { display: flex !important; }
   .screen { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
@@ -2602,6 +2605,7 @@ body::before {
   .set-card { padding: var(--sp-5); }
   #riskPanelWrap { padding: var(--sp-5) !important; }
   #riskMetrics { grid-template-columns: 1fr !important; gap: var(--sp-4) !important; }
+  #app { display: block !important; }
 }
 
 @media (max-width: 380px) {
@@ -6457,7 +6461,7 @@ async function bootApp(){
   updateSnapshotUI();
   refreshCryptoPrices().then(()=>render()).catch(()=>{});
   clearTimeout(t);hide();
-  document.getElementById('app').style.display='flex';
+  document.getElementById('app').style.display = window.innerWidth <= 679 ? 'block' : 'flex';
   if(apiKey) refreshPrices();
   // Auto-snapshot check (non-blocking, after UI is ready)
   setTimeout(()=>checkAutoSnapshot(),2000);
@@ -6467,6 +6471,14 @@ async function bootApp(){
   }
 }
 window.addEventListener('DOMContentLoaded',()=>{initTimeRangeChips();if(!checkAuth())return;bootApp();});
+
+// Fix mobile layout on orientation change / resize
+window.addEventListener('resize', ()=>{
+  const app = document.getElementById('app');
+  if(app && app.style.display !== 'none'){
+    app.style.display = window.innerWidth <= 679 ? 'block' : 'flex';
+  }
+});
 
 // ═══════════════════════════════ DATA LOAD
 async function loadAll(){
